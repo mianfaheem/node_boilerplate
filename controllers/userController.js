@@ -1,7 +1,9 @@
 const bcryptjs = require("bcryptjs");
 const validator = require("fastest-validator");
 const jwt = require("jsonwebtoken");
+const common = require('../helper/common');
 const User = require("../models/user");
+const emailSending = require('../config/emailSending')
 
 
 /******************** Registering a User *******************/
@@ -15,12 +17,20 @@ exports.register = async function (req, res, next) {
                 let user= {
                     name: req.body.name,
                     email: req.body.email ? req.body.email.toLowerCase() : '',
-                    password: req.body.password
+                    password: req.body.password,
+                    firstName: req.body.firstName,
+                    lastName: req.body.lastName,
+                    phone: req.body.phone,
+                    age: req.body.age,
                 };
                 let schema = {
                     name: { type: "string", optional: false },
                     email: { type: "string", optional: false },
-                    password: { type: "string", optional: false }
+                    password: { type: "string", optional: false },
+                    firstName: { type: "string", optional: true },
+                    lastName: { type: "string", optional: true },
+                    phone: { type: "string", optional: true },
+                    age: { type: "number", optional: true },
                 }
                 if(validateResponse(res, user, schema) === true){
                     bcryptjs.genSalt(13, function (err, salt) {
@@ -102,6 +112,39 @@ exports.login = async function (req, res, next) {
     }
 };
 
+/******************** Update User Profile *******************/
+exports.updateUser = async function (req, res, next) {
+    try {
+        const id = req.tokenData.userId;
+        await User.findById(id).then(async (result) => {
+            if (result) {                    
+                let user= {
+                    name: req.body.name ? req.body.name : result.name,
+                    firstName: req.body.firstName ? req.body.firstName : result.firstName,
+                    lastName: req.body.lastName ? req.body.lastName : result.lastName,
+                    phone: req.body.phone ? req.body.phone : result.phone,
+                    age: req.body.age ? req.body.age : result.age,
+                };
+                let schema = {
+                    name: { type: "string", optional: true },
+                    firstName: { type: "string", optional: true },
+                    lastName: { type: "string", optional: true },
+                    phone: { type: "string", optional: true },
+                    age: { type: "number", optional: true },
+                }
+                if(validateResponse(res, user, schema) === true){
+                    const updatedUser = await User.findByIdAndUpdate(id,user,{ new: true });                    
+                    res.status(200).json({ success: true, message: "User Updated successfully", data: updatedUser });
+                }
+            } else {
+                res.status(409).json({ success: false, message: "User Not Found" });
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Something went wrong",error: error });
+    }
+};
+
 /********************Get User By Id*******************/
 exports.getUserById = async function (req, res, next) {
     try {
@@ -109,6 +152,72 @@ exports.getUserById = async function (req, res, next) {
         await User.findById(id).then((result) => {
             if (result) {
                 res.status(200).json({ success: true, data: result });
+            } else {
+                res.status(409).json({ success: false, message: "User Not Found" });
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Something went wrong",error: error });
+    }
+};
+
+/******************** Forgot Password *******************/
+exports.forgotPassword = async function (req, res, next) {
+    try {
+        const email = req.body.email;    
+        await User.findOne({email: email}).then(async(result) => {
+            if (result) {
+                const newPassword = common.generateRandomString(8);
+                console.log(newPassword)
+                bcryptjs.genSalt(13, function (err, salt) {
+                    bcryptjs.hash(newPassword, salt, async function (err, hash) {
+                        const newHashedPassword = hash;
+                        await User.findByIdAndUpdate(result._id,{ password: newHashedPassword },{ new: true });
+                        const emailSubject = 'Forgot Password';
+                        const emailBody = `<p>We have received your Reset Password Request. Your temporary password is ${newPassword} \n Please use these logins and change your password.</p>`;
+                        await emailSending.sendEMessage(emailSubject,emailBody,email);
+                        res.status(200).json({ success: true, message: "Email has been sent" });
+                    });
+                });
+            } else {
+                res.status(409).json({ success: false, message: "User Not Found" });
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Something went wrong",error: error });
+    }
+};
+
+/******************** Change Password *******************/
+exports.changePassword = async function (req, res, next) {
+    try {
+        const id = req.tokenData.userId;    
+        await User.findById(id).then(async(response) => {
+            if (response) {
+                let user= {
+                    oldPassword: req.body.oldPassword,
+                    newPassword: req.body.newPassword
+                };
+                let schema = {
+                    oldPassword: { type: "string", optional: false },
+                    newPassword: { type: "string", optional: false }
+                }
+                if(validateResponse(res, user, schema) === true){
+                    let userPass = await User.findById(id).select('password');
+                    bcryptjs.compare(user.oldPassword,userPass.password,function (err, result) {
+                        if (result) {
+                            bcryptjs.genSalt(13, function (err, salt) {
+                                bcryptjs.hash(user.newPassword, salt, async function (err, hash) {
+                                    let newPassword = hash; 
+                                    await User.findByIdAndUpdate(id,{ password: newPassword },{ new: true });
+                                    res.status(200).json({ success: true, message: "Password updated successfully" });
+                                });
+                            });
+                        } else {
+                            res.status(401).json({ success: false, message: "Invalid Credentials" });
+                        }
+                    });
+                }
             } else {
                 res.status(409).json({ success: false, message: "User Not Found" });
             }

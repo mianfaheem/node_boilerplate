@@ -1,12 +1,15 @@
 const nodemailer = require('nodemailer');
+const { google } = require('googleapis');
+const OAuth2 = google.auth.OAuth2;
+
+const OAuth2_client = new OAuth2(process.env.MAIL_CLIENT_ID, process.env.MAIL_CLIENT_SECRET);
+OAuth2_client.setCredentials({ refresh_token: process.env.MAIL_REFRESH_TOKEN });
+
 
 const sendEMessage = (subject, body, email) => {
     return new Promise((resolve, reject) => {
-
         var transporter = nodemailer.createTransport({
-            host: process.env.MAIL_HOST,
-            port: process.env.MAIL_PORT,
-            secure: true,
+            service: 'gmail',
             auth: {
                 type: 'OAuth2',
                 user: process.env.MAIL_SENDER_EMAIL,
