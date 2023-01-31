@@ -8,6 +8,21 @@ OAuth2_client.setCredentials({ refresh_token: process.env.MAIL_REFRESH_TOKEN });
 
 const sendEMessage = (subject, body, email) => {
     return new Promise((resolve, reject) => {
+        // ********************* For Simple Auth gmail ***************************
+        // var transporter = nodemailer.createTransport({
+        //     host: process.env.MAIL_HOST,
+        //     port: 465,
+        //     pool: true,
+        //     secure: true,
+        //     auth: {
+        //         user: process.env.MAIL_SENDER_EMAIL,
+        //         pass: process.env.MAIL_PASSWORD,
+        //     },
+        //     tls: {
+        //         rejectUnauthorized: false
+        //     }
+        // });
+        // *********************** For OAuth2 gmail ****************************
         var transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
